@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -36,6 +36,10 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{display:flex;flex-direction:column}
 #scroller{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #scroller>main{min-height:calc(100% + 1px)}
+.serleg{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:12px}
+.serleg>div{background:var(--surface2);border-radius:12px;padding:9px 12px}
+.serleg .v{display:block;font-family:var(--display);font-weight:800;font-size:17px;margin:2px 0}
+html{touch-action:manipulation}
 html.standalone,html.standalone>body{height:var(--appH)}
 html.standalone>body{height:calc(var(--appH) - env(safe-area-inset-top,0px))}
 html.standalone .tabbar{position:relative;flex:none}
@@ -441,9 +445,20 @@ function pageBalance(){
   var keys = ['Total','Liquid'].concat(S.data.accounts.map(function(a){ return a.name; }));
   var h = '<div class="head"><div><h1>Balance</h1><p class="q">Do I have more money than before?</p></div></div>';
   h += '<div class="rangebar">' + seg('balr', [['7d','7 days'],['30d','30 days'],['12w','12 weeks'],['6m','6 months'],['1y','1 year'],['all','All']], r) + '</div>';
-  h += '<div class="card" style="margin-bottom:12px"><div class="chead"><div><span class="k">Total today</span><span class="big num">' + m(tot) + '</span></div><span class="badge ' + (ch >= 0 ? 'up' : 'down') + '">' + pct(ch) + '</span></div>' +
+  var selK = keys.filter(function(k){ return S.bal.on[k]; });
+  function serCol(k){ return k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : ACC_COL[k] || '#98A2B3'; }
+  function chgOf(k){ var v = balAt(t, k), v0 = balAt(s, k); return {v:v, d:v - v0, p:v0 ? (v - v0) / v0 * 100 : 0}; }
+  var headH;
+  if (selK.length === 1){
+    var one = chgOf(selK[0]);
+    headH = '<div class="chead"><div><span class="k">' + esc(selK[0]) + ' today</span><span class="big num">' + m(one.v) + '</span><span class="q">' + (Math.abs(one.d) < 0.5 ? 'No change in this range' : (one.d > 0 ? '+' : '') + m(one.d) + ' in this range') + '</span></div><span class="badge ' + (one.p >= 0 ? 'up' : 'down') + '">' + pct(one.p) + '</span></div>';
+  } else {
+    headH = '<div class="chead"><div><h2>Balance trend</h2><p class="q">' + selK.length + ' lines selected</p></div></div>';
+  }
+  var legendH = selK.length > 1 ? '<div class="serleg">' + selK.map(function(k){ var c = chgOf(k); return '<div><span class="k"><span class="sw" style="background:' + serCol(k) + '"></span>' + esc(k) + '</span><span class="num v">' + m(c.v) + '</span><span class="' + (c.d > 0.5 ? 'pos' : c.d < -0.5 ? 'neg' : 'mute') + ' small">' + pct(c.p) + '</span></div>'; }).join('') + '</div>' : '';
+  h += '<div class="card" style="margin-bottom:12px">' + headH +
        '<div class="chips" style="margin-bottom:12px">' + keys.map(function(k){ var c = k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : ACC_COL[k] || '#98A2B3'; return '<button type="button" class="chip" data-act="balser" data-v="' + esc(k) + '" aria-pressed="' + !!S.bal.on[k] + '"><span class="dot" style="background:' + c + '"></span>' + esc(k) + '</button>'; }).join('') + '</div>' +
-       '<div class="chartbox"><canvas id="balChart"></canvas></div>' + (clamped ? '<p class="q" style="margin-top:10px">History starts ' + fdy(S.hist.start) + '. The chart fills in as days pass.</p>' : '') + '</div>';
+       '<div class="chartbox"><canvas id="balChart"></canvas></div>' + legendH + (clamped ? '<p class="q" style="margin-top:10px">History starts ' + fdy(S.hist.start) + '. The chart fills in as days pass.</p>' : '') + '</div>';
   var accs = S.data.accounts.slice().sort(function(a, b){ return balAt(t, b.name) - balAt(t, a.name); });
   var max = Math.max.apply(null, accs.map(function(a){ return balAt(t, a.name); }).concat([1]));
   var liq = balAt(t, 'Liquid');
@@ -659,7 +674,7 @@ function themeBtnHtml(){
   var eye = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   var eyeOff = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
   var ref = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
-  return '<div class="tools"><button type="button" class="themebtn" data-act="refresh" aria-label="Refresh">' + ref + '</button><button type="button" class="themebtn" data-act="hide" aria-label="' + (S.hide ? 'Show values' : 'Hide values') + '">' + (S.hide ? eyeOff : eye) + '</button><button type="button" class="themebtn" data-act="theme" aria-label="Switch to ' + (S.theme === 'dark' ? 'light' : 'dark') + ' mode">' + (S.theme === 'dark' ? sun : moon) + '</button></div>';
+  return '<div class="tools"><button type="button" class="themebtn" data-act="hide" aria-label="' + (S.hide ? 'Show values' : 'Hide values') + '">' + (S.hide ? eyeOff : eye) + '</button><button type="button" class="themebtn" data-act="theme" aria-label="Switch to ' + (S.theme === 'dark' ? 'light' : 'dark') + ' mode">' + (S.theme === 'dark' ? sun : moon) + '</button></div>';
 }
 function render(keepScroll){
   if (!S.data) return;
@@ -808,7 +823,8 @@ function demoData(){
     var max = sc.scrollHeight - sc.clientHeight; if (max <= 0) return;
     if (sc.scrollTop <= 0) sc.scrollTop = 1; else if (sc.scrollTop >= max) sc.scrollTop = max - 1;
   }, {passive:true});
-  document.addEventListener('touchmove', function(e){ if (!e.target.closest || !e.target.closest('#scroller')) e.preventDefault(); }, {passive:false});
+  document.addEventListener('touchmove', function(e){ if (e.touches && e.touches.length > 1){ e.preventDefault(); return; } if (!e.target.closest || !e.target.closest('#scroller')) e.preventDefault(); }, {passive:false});
+  ['gesturestart','gesturechange'].forEach(function(n){ document.addEventListener(n, function(e){ e.preventDefault(); }, {passive:false}); });
   var y0 = null, pull = 0;
   sc.addEventListener('touchstart', function(e){ y0 = sc.scrollTop <= 1 && !S.busy ? e.touches[0].clientY : null; pull = 0; $('ptr').style.transition = 'none'; }, {passive:true});
   sc.addEventListener('touchmove', function(e){ if (y0 === null) return; pull = (e.touches[0].clientY - y0) * 0.5; if (pull > 0 && sc.scrollTop <= 1) ptrShow(pull >= 60 ? 'ready' : 'pull', pull); else { pull = 0; ptrHide(); } }, {passive:true});
