@@ -36,7 +36,17 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{display:flex;flex-direction:column}
 #scroller{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #scroller>main{min-height:calc(100% + 1px)}
-#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translate(-50%,-60px);opacity:0;z-index:40;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--text);box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .2s,opacity .2s;white-space:nowrap}
+html.standalone,html.standalone>body{height:var(--appH)}
+html.standalone>body{height:calc(var(--appH) - env(safe-area-inset-top,0px))}
+html.standalone .tabbar{position:relative;flex:none}
+html.standalone main{padding-bottom:24px}
+#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;transform:translate(-50%,-60px);opacity:0;z-index:40;pointer-events:none;background:var(--surface);border:1px solid var(--line);color:var(--mute);box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .2s,opacity .2s}
+#ptr svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#ptr.ready{color:var(--accent)}
+#ptr.error{color:var(--neg)}
+#ptr.spin{color:var(--accent)}
+#ptr.spin svg{animation:ptrspin .8s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
 button{font:inherit;color:inherit}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -178,7 +188,7 @@ h2{font-size:16px;font-weight:700;margin:0;letter-spacing:-.01em}
   <div class="brand">MG’s Finance</div>
   <nav class="topnav" id="topnav" aria-label="Pages"></nav>
 </div></header>
-<div id="ptr" aria-live="polite"></div><div id="scroller"><main id="view"><div class="loading">Loading your numbers...</div></main></div>
+<div id="ptr" aria-label="Refresh" role="status"></div><div id="scroller"><main id="view"><div class="loading">Loading your numbers...</div></main></div>
 <nav class="tabbar" id="tabbar" aria-label="Pages"></nav>
 
 <script>
@@ -732,13 +742,19 @@ function setData(d, keep){
   S.hist = buildHistory();
   render(!!keep);
 }
-function ptrShow(txt, y){ var p = $('ptr'); if (!p) return; p.textContent = txt; p.style.opacity = y > 4 ? 1 : 0; p.style.transform = 'translate(-50%,' + (Math.min(y, 70) - 50) + 'px)'; }
+var PTR_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
+function ptrShow(mode, y){
+  var p = $('ptr'); if (!p) return; if (!p.firstChild) p.innerHTML = PTR_ICON;
+  p.className = mode === 'pull' ? '' : mode;
+  p.style.opacity = y > 4 ? 1 : 0; p.style.transform = 'translate(-50%,' + (Math.min(y, 70) - 50) + 'px)';
+  p.firstChild.style.transform = mode === 'spin' ? '' : 'rotate(' + Math.round(Math.min(y, 70) * 4) + 'deg)';
+}
 function ptrHide(){ var p = $('ptr'); if (!p) return; p.style.transition = ''; p.style.opacity = 0; p.style.transform = 'translate(-50%,-60px)'; }
 function refresh(silent){
   if (S.busy) return; S.busy = true;
-  if (!silent){ $('ptr').style.transition = ''; ptrShow('Refreshing...', 60); }
+  if (!silent){ $('ptr').style.transition = ''; ptrShow('spin', 60); }
   function ok(d){ S.busy = false; setData(d, true); ptrHide(); }
-  function bad(e){ S.busy = false; ptrShow('Could not refresh', 60); setTimeout(ptrHide, 1800); }
+  function bad(e){ S.busy = false; ptrShow('error', 60); setTimeout(ptrHide, 1800); }
   if (IS_GAS) google.script.run.withSuccessHandler(ok).withFailureHandler(bad).getRawData(KEY);
   else if (API) apiGet(ok, bad);
   else setTimeout(function(){ ok(S.data); }, 600);
@@ -795,8 +811,17 @@ function demoData(){
   document.addEventListener('touchmove', function(e){ if (!e.target.closest || !e.target.closest('#scroller')) e.preventDefault(); }, {passive:false});
   var y0 = null, pull = 0;
   sc.addEventListener('touchstart', function(e){ y0 = sc.scrollTop <= 1 && !S.busy ? e.touches[0].clientY : null; pull = 0; $('ptr').style.transition = 'none'; }, {passive:true});
-  sc.addEventListener('touchmove', function(e){ if (y0 === null) return; pull = (e.touches[0].clientY - y0) * 0.5; if (pull > 0 && sc.scrollTop <= 1) ptrShow(pull >= 60 ? 'Release to refresh' : 'Pull to refresh', pull); else { pull = 0; ptrHide(); } }, {passive:true});
+  sc.addEventListener('touchmove', function(e){ if (y0 === null) return; pull = (e.touches[0].clientY - y0) * 0.5; if (pull > 0 && sc.scrollTop <= 1) ptrShow(pull >= 60 ? 'ready' : 'pull', pull); else { pull = 0; ptrHide(); } }, {passive:true});
   sc.addEventListener('touchend', function(){ if (y0 === null) return; y0 = null; if (pull >= 60) refresh(false); else ptrHide(); pull = 0; }, {passive:true});
+})();
+
+/* ---------- full-screen app mode (home screen) ---------- */
+(function(){
+  var sa = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (!sa || IS_GAS) return;
+  function size(){ var portrait = !window.matchMedia || matchMedia('(orientation: portrait)').matches; var h = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width); document.documentElement.style.setProperty('--appH', h + 'px'); }
+  document.documentElement.classList.add('standalone'); size();
+  window.addEventListener('orientationchange', function(){ setTimeout(size, 300); });
 })();
 
 /* ---------- start ---------- */
