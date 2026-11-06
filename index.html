@@ -228,7 +228,7 @@ var PAGES = [
   {id:'budgets', name:'Budgets', short:'Budgets', icon:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/>'},
   {id:'records', name:'Records', short:'Records', icon:'<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>'}
 ];
-var CAT_COL = {'Groceries':'#F97066','Eating Out':'#FDB022','Bills & Utilities':'#2ED3B7','Home':'#A48AFB','Transport & Car':'#7CD4FD','Shopping':'#F670C7','Life & Fun':'#85E13A','Family & Giving':'#FD853A','Fees & Other':'#98A2B3'};
+var CAT_COL = {'Groceries':'#F97066','Eating Out':'#FDB022','Bills & Utilities':'#2ED3B7','Home':'#A48AFB','Transport & Car':'#7CD4FD','Shopping':'#F670C7','Life & Fun':'#85E13A','Family & Giving':'#FD853A','Fees & Other':'#98A2B3','Health & Care':'#36BFFA'};
 var LAB_COL = {'Planned':'#85E13A','Impulse':'#FDB022','Leak':'#F97066','Social':'#7CD4FD','Work':'#A48AFB','To be paid back':'#2ED3B7'};
 var MNW_COL = {'Must':'#F97066','Need':'#FDB022','Want':'#2ED3B7','Not tagged':'#667085'};
 var ACC_COL = {'Bank':'#85E13A','Cash Daily':'#98A2B3','Savings':'#5CB8FF','Whish':'#F97066','Gold':'#F2C25B','Crypto':'#A48AFB'};
@@ -262,7 +262,8 @@ function mh(n, dec){ var o = S.sens; S.sens = true; var r = m(n, dec); S.sens = 
 function kfmtH(v){ var o = S.sens; S.sens = true; var r = kfmt(v); S.sens = o; return r; }
 function pct(x){ return (x > 0 ? '+' : '') + (Math.abs(x) < 10 ? x.toFixed(1) : Math.round(x)) + '%'; }
 function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
-function catCol(c, i){ return CAT_COL[c] || LAB_COL[c] || EXTRA[(i||0) % EXTRA.length]; }
+function accCol(n){ return ACC_COL[n] || catCol(n); }
+function catCol(c, i){ if (CAT_COL[c] || LAB_COL[c]) return CAT_COL[c] || LAB_COL[c]; var h = 0, k = String(c || ''); for (var j = 0; j < k.length; j++) h = (h * 31 + k.charCodeAt(j)) >>> 0; return k ? EXTRA[h % EXTRA.length] : EXTRA[(i||0) % EXTRA.length]; }
 function isSpend(t){ return t.type === 'Expense' || t.type === 'Debt payment'; }
 function isInv(n){ return n === 'Gold' || n === 'Crypto'; }
 function sum(a, f){ var s = 0; a.forEach(function(x){ s += f ? f(x) : x; }); return s; }
@@ -410,7 +411,7 @@ function pageOverview(){
   var h = '<div class="head"><div><h1>Hello, MG</h1><p class="q">' + ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][t.getDay()] + ', ' + fdy(t) + '</p></div></div>' + alerts;
   h += '<div class="grid pair"><button type="button" class="card tap" data-act="nav" data-v="balance"><span class="k">Liquid money</span><span class="big num">' + mh(liq) + '</span></button>' +
        '<button type="button" class="card tap" data-act="nav" data-v="balance"><span class="k">Total with gold and crypto</span><span class="big num">' + mh(tot) + '</span></button></div>';
-  h += '<button type="button" class="card tap strip" data-act="nav" data-v="balance" aria-label="Daily accounts">' + ['Cash Daily','Whish','Bank'].map(function(n){ if (!cur.some(function(x){ return x.name === n; })) return ''; return '<div class="cell" style="--c:' + ACC_COL[n] + '"><span class="k"><span class="sw" style="background:' + ACC_COL[n] + '"></span>' + n + '</span><span class="v num">' + mh(balAt(t, n)) + '</span></div>'; }).join('') + '</button>';
+  h += '<button type="button" class="card tap strip" data-act="nav" data-v="balance" aria-label="Daily accounts">' + ['Cash Daily','Whish','Bank'].map(function(n){ if (!cur.some(function(x){ return x.name === n; })) return ''; return '<div class="cell" style="--c:' + accCol(n) + '"><span class="k"><span class="sw" style="background:' + accCol(n) + '"></span>' + n + '</span><span class="v num">' + mh(balAt(t, n)) + '</span></div>'; }).join('') + '</button>';
   h += '<div class="grid g57"><button type="button" class="card tap" data-act="nav" data-v="budgets"><div class="row"><span class="k">Pay period, ' + fd(P.start) + ' to ' + fd(P.end) + '</span></div>' +
        '<div class="tiles" style="margin:12px 0 0"><div class="tile"><span class="k">Income</span><span class="v num pos">' + mh(inc) + '</span></div><div class="tile"><span class="k">Spent</span><span class="v num">' + m(spent) + '</span></div></div>' +
        '<p style="margin:12px 0 0;font-size:14px">' + esc(paceTxt) + '</p>' +
@@ -446,7 +447,7 @@ function pageBalance(){
   var h = '<div class="head"><div><h1>Balance</h1><p class="q">Do I have more money than before?</p></div></div>';
   h += '<div class="rangebar">' + seg('balr', [['7d','7 days'],['30d','30 days'],['12w','12 weeks'],['6m','6 months'],['1y','1 year'],['all','All']], r) + '</div>';
   var selK = keys.filter(function(k){ return S.bal.on[k]; });
-  function serCol(k){ return k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : ACC_COL[k] || '#98A2B3'; }
+  function serCol(k){ return k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : accCol(k); }
   function chgOf(k){ var v = balAt(t, k), v0 = balAt(s, k); return {v:v, d:v - v0, p:v0 ? (v - v0) / v0 * 100 : 0}; }
   var headH;
   if (selK.length === 1){
@@ -457,14 +458,14 @@ function pageBalance(){
   }
   var legendH = selK.length > 1 ? '<div class="serleg">' + selK.map(function(k){ var c = chgOf(k); return '<div><span class="k"><span class="sw" style="background:' + serCol(k) + '"></span>' + esc(k) + '</span><span class="num v">' + m(c.v) + '</span><span class="' + (c.d > 0.5 ? 'pos' : c.d < -0.5 ? 'neg' : 'mute') + ' small">' + pct(c.p) + '</span></div>'; }).join('') + '</div>' : '';
   h += '<div class="card" style="margin-bottom:12px">' + headH +
-       '<div class="chips" style="margin-bottom:12px">' + keys.map(function(k){ var c = k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : ACC_COL[k] || '#98A2B3'; return '<button type="button" class="chip" data-act="balser" data-v="' + esc(k) + '" aria-pressed="' + !!S.bal.on[k] + '"><span class="dot" style="background:' + c + '"></span>' + esc(k) + '</button>'; }).join('') + '</div>' +
+       '<div class="chips" style="margin-bottom:12px">' + keys.map(function(k){ var c = k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : accCol(k); return '<button type="button" class="chip" data-act="balser" data-v="' + esc(k) + '" aria-pressed="' + !!S.bal.on[k] + '"><span class="dot" style="background:' + c + '"></span>' + esc(k) + '</button>'; }).join('') + '</div>' +
        '<div class="chartbox"><canvas id="balChart"></canvas></div>' + legendH + (clamped ? '<p class="q" style="margin-top:10px">History starts ' + fdy(S.hist.start) + '. The chart fills in as days pass.</p>' : '') + '</div>';
   var accs = S.data.accounts.slice().sort(function(a, b){ return balAt(t, b.name) - balAt(t, a.name); });
   var max = Math.max.apply(null, accs.map(function(a){ return balAt(t, a.name); }).concat([1]));
   var liq = balAt(t, 'Liquid');
   h += '<div class="grid g75"><div class="card"><div class="chead"><div><h2>Accounts</h2><p class="q">Where the money sits, and how each moved in this range</p></div></div>' +
        '<div class="tiles"><div class="tile"><div class="row"><span class="k">Liquid</span>' + chgBadge(liq, balAt(s, 'Liquid')) + '</div><span class="v num">' + m(liq) + '</span></div><div class="tile"><div class="row"><span class="k">Total</span>' + chgBadge(tot, tot0) + '</div><span class="v num">' + m(tot) + '</span></div></div>' +
-       accs.map(function(a){ var v = balAt(t, a.name), v0 = balAt(s, a.name), dv = v - v0; return '<div class="rowbtn" style="cursor:default"><div class="row"><span class="n"><span class="sw" style="background:' + (ACC_COL[a.name] || '#98A2B3') + '"></span>' + esc(a.name) + (a.liquid ? '' : ' <span class="badge">Investment</span>') + '</span><span class="v">' + m(v) + '</span></div><div class="bar"><i style="width:' + Math.max(0, v / max * 100) + '%;background:' + (ACC_COL[a.name] || '#98A2B3') + '"></i></div><div class="row small" style="margin-top:6px"><span class="mute">' + lastEntry(a.name) + '</span><span class="' + (dv > 0.5 ? 'pos' : dv < -0.5 ? 'neg' : 'mute') + '">' + (Math.abs(dv) < 0.5 ? 'No change' : (dv > 0 ? '+' : '') + m(dv)) + '</span></div></div>'; }).join('') + '</div>';
+       accs.map(function(a){ var v = balAt(t, a.name), v0 = balAt(s, a.name), dv = v - v0; return '<div class="rowbtn" style="cursor:default"><div class="row"><span class="n"><span class="sw" style="background:' + accCol(a.name) + '"></span>' + esc(a.name) + (a.liquid ? '' : ' <span class="badge">Investment</span>') + '</span><span class="v">' + m(v) + '</span></div><div class="bar"><i style="width:' + Math.max(0, v / max * 100) + '%;background:' + accCol(a.name) + '"></i></div><div class="row small" style="margin-top:6px"><span class="mute">' + lastEntry(a.name) + '</span><span class="' + (dv > 0.5 ? 'pos' : dv < -0.5 ? 'neg' : 'mute') + '">' + (Math.abs(dv) < 0.5 ? 'No change' : (dv > 0 ? '+' : '') + m(dv)) + '</span></div></div>'; }).join('') + '</div>';
   var g = balAt(t, 'Gold'), c = balAt(t, 'Crypto');
   h += '<div class="card"><h2>Composition</h2><p class="q">Cash against investments</p><div class="stack">' + [['Liquid', liq, css('--liquid')], ['Gold', g, ACC_COL.Gold], ['Crypto', c, ACC_COL.Crypto]].map(function(x){ return '<div style="width:' + (x[1] / tot * 100) + '%;background:' + x[2] + '"></div>'; }).join('') + '</div>' +
        '<div class="legend">' + [['Liquid', liq, css('--liquid')], ['Gold', g, ACC_COL.Gold], ['Crypto', c, ACC_COL.Crypto]].map(function(x){ return '<span><span class="sw" style="background:' + x[2] + '"></span>' + x[0] + ' ' + Math.round(x[1] / tot * 100) + '%</span>'; }).join('') + '</div>' +
@@ -484,7 +485,7 @@ function afterBalance(){
   keys.forEach(function(k){ sets[k] = []; });
   for (var d = R.start; d <= R.end; d = add(d, 1)){ labels.push(fd(d)); keys.forEach(function(k){ sets[k].push(balAt(d, k)); }); }
   var pr = labels.length === 1 ? {pointRadius:4, stepped:'after'} : {stepped:'after'};
-  var ds = keys.map(function(k){ var c = k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : ACC_COL[k] || '#98A2B3'; return line(k, sets[k], c, pr); });
+  var ds = keys.map(function(k){ var c = k === 'Total' ? css('--total') : k === 'Liquid' ? css('--liquid') : accCol(k); return line(k, sets[k], c, pr); });
   if (keys.length === 1){ ds[0].fill = true; ds[0].backgroundColor = hexA(ds[0].borderColor, .12); }
   chart('balChart', {type:'line', data:{labels:labels, datasets:ds}, options:baseOpts()});
 }
@@ -545,10 +546,10 @@ function pageSpending(){
   var keys = Object.keys(groups).sort(function(a, b){ return groups[b] - groups[a]; }); S.sp.keys = keys; S.sp.groups = groups;
   var P = prevOf(r, R), prevTotal = sum(spendIn(P, S.sp.accts), function(x){ return x.usd; });
   var h = '<div class="head"><div><h1>Spending</h1><p class="q">Where does my money go?</p></div></div>' + rangeBar('sp');
-  h += '<div class="chips" style="margin:-4px 0 14px">' + liquidAccts.map(function(a){ return '<button type="button" class="chip" data-act="spacct" data-v="' + esc(a.name) + '" aria-pressed="' + (S.sp.accts[a.name] !== false) + '"><span class="dot" style="background:' + (ACC_COL[a.name] || '#98A2B3') + '"></span>' + esc(a.name) + '</button>'; }).join('') + '</div>';
+  h += '<div class="chips" style="margin:-4px 0 14px">' + liquidAccts.map(function(a){ return '<button type="button" class="chip" data-act="spacct" data-v="' + esc(a.name) + '" aria-pressed="' + (S.sp.accts[a.name] !== false) + '"><span class="dot" style="background:' + accCol(a.name) + '"></span>' + esc(a.name) + '</button>'; }).join('') + '</div>';
   h += '<div class="grid g2"><div class="card"><div class="chead"><div><h2>Categories and labels</h2><p class="q">' + (prevTotal ? (total >= prevTotal ? m(total - prevTotal) + ' more than the previous range' : m(prevTotal - total) + ' less than the previous range') : 'Tap a row to see its records') + '</p></div>' + seg('spview', [['cat','Categories'],['lab','Labels']], S.sp.view) + '</div>' +
        (keys.length ? '<div class="donutwrap"><canvas id="spDonut"></canvas><div class="donutc"><span class="k">Spent</span><span class="num" style="font-size:26px;font-weight:800">' + m(total) + '</span></div></div>' +
-       keys.map(function(k, i){ var c = by === 'cat' ? catCol(k, i) : (LAB_COL[k] || EXTRA[i % EXTRA.length]); return '<button type="button" class="rowbtn" data-act="rec" data-' + (by === 'cat' ? 'cat' : 'label') + '="' + esc(k) + '" data-s="' + K(R.start) + '" data-e="' + K(R.end) + '"><div class="row"><span class="n"><span class="sw" style="background:' + c + '"></span>' + esc(k) + '</span><span class="v">' + m(groups[k]) + ' <span class="mute small">' + Math.round(groups[k] / total * 100) + '%</span></span></div><div class="bar"><i style="width:' + (groups[k] / groups[keys[0]] * 100) + '%;background:' + c + '"></i></div></button>'; }).join('')
+       keys.map(function(k, i){ var c = by === 'cat' ? catCol(k, i) : catCol(k, i); return '<button type="button" class="rowbtn" data-act="rec" data-' + (by === 'cat' ? 'cat' : 'label') + '="' + esc(k) + '" data-s="' + K(R.start) + '" data-e="' + K(R.end) + '"><div class="row"><span class="n"><span class="sw" style="background:' + c + '"></span>' + esc(k) + '</span><span class="v">' + m(groups[k]) + ' <span class="mute small">' + Math.round(groups[k] / total * 100) + '%</span></span></div><div class="bar"><i style="width:' + (groups[k] / groups[keys[0]] * 100) + '%;background:' + c + '"></i></div></button>'; }).join('')
        : '<div class="empty">No spending in this range.</div>') + '</div>';
   var nat = S.sp.nature, natTotal = sum(tx.filter(function(x){ return nat === 'All' || x.mnw === nat; }), function(x){ return x.usd; });
   var mn = {Must:0, Need:0, Want:0, 'Not tagged':0}; tx.forEach(function(x){ mn[mn.hasOwnProperty(x.mnw) ? x.mnw : 'Not tagged'] += x.usd; });
@@ -576,7 +577,7 @@ function calHtml(R, tx){
 }
 function afterSpending(){
   var keys = S.sp.keys, g = S.sp.groups, by = S.sp.view === 'cat';
-  if (keys.length) chart('spDonut', {type:'doughnut', data:{labels:keys, datasets:[{data:keys.map(function(k){ return g[k]; }), backgroundColor:keys.map(function(k, i){ return by ? catCol(k, i) : (LAB_COL[k] || EXTRA[i % EXTRA.length]); }), borderColor:css('--surface'), borderWidth:3, hoverOffset:6}]},
+  if (keys.length) chart('spDonut', {type:'doughnut', data:{labels:keys, datasets:[{data:keys.map(function(k){ return g[k]; }), backgroundColor:keys.map(function(k, i){ return by ? catCol(k, i) : catCol(k, i); }), borderColor:css('--surface'), borderWidth:3, hoverOffset:6}]},
     options:{responsive:true, maintainAspectRatio:false, cutout:'72%', plugins:{legend:{display:false}, tooltip:{callbacks:{label:function(c){ return ' ' + c.label + ': ' + m(c.parsed); }}}}}});
   var R = S.sp.R, B = bucketsOf(R), nat = S.sp.nature, cats = nat === 'All' ? ['Must','Need','Want','Not tagged'] : [nat];
   var data = {}; cats.forEach(function(c){ data[c] = B.map(function(){ return 0; }); });
