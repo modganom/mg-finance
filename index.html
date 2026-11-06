@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MG’s Finance">
+<meta name="theme-color" content="#0B0F14">
+<meta name="robots" content="noindex, nofollow">
+<title>MG’s Finance</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="apple-touch-icon.png">
+<style>
+:root{--top:#0B0F14;--bottom:#131A22}
+html,body{margin:0;height:100%;background:var(--top);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;color:#EEF2F6}
+#topfill{position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--top);z-index:2}
+#botfill{position:fixed;left:0;right:0;bottom:0;height:env(safe-area-inset-bottom,0px);background:var(--bottom);z-index:2}
+#app{position:fixed;left:0;top:env(safe-area-inset-top,0px);width:100%;height:calc(100% - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));border:0;background:var(--top);display:none}
+#setup{display:none;padding:calc(env(safe-area-inset-top,0px) + 48px) 24px 24px;max-width:460px;margin:0 auto}
+#setup h1{font-size:24px;margin:0 0 8px}
+#setup p{color:#8B98A8;font-size:15px;line-height:1.45;margin:0 0 18px}
+#setup label{display:block;font-size:13px;color:#8B98A8;margin:14px 0 6px}
+#setup input{width:100%;box-sizing:border-box;font-size:16px;padding:12px;border-radius:12px;border:1px solid #232E3A;background:#131A22;color:#EEF2F6}
+#setup button{margin-top:20px;width:100%;font-size:16px;font-weight:600;padding:13px;border:0;border-radius:12px;background:#8A90FF;color:#0B0F14}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#8B98A8;font-size:15px}
+</style>
+</head>
+<body>
+<div id="topfill"></div>
+<div id="loading">Opening...</div>
+<iframe id="app" title="MG’s Finance" allow="clipboard-write"></iframe>
+<form id="setup">
+  <h1>Connect your dashboard</h1>
+  <p>Paste the two values from the Apps Script log. They stay on this device only.</p>
+  <label for="u">Web app URL (ends in /exec)</label>
+  <input id="u" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec">
+  <label for="k">Key</label>
+  <input id="k" type="password" autocomplete="off" placeholder="Long secret key">
+  <button type="submit">Open dashboard</button>
+</form>
+<div id="botfill"></div>
+<script>
+(function(){
+  function parse(h){ var o = {}; h.replace(/^#/, '').split('&').forEach(function(p){ var i = p.indexOf('='); if (i > 0) o[p.slice(0, i)] = decodeURIComponent(p.slice(i + 1)); }); return o; }
+  function get(n){ try { return localStorage.getItem(n); } catch(e){ return null; } }
+  function set(n, v){ try { localStorage.setItem(n, v); } catch(e){} }
+  var h = parse(location.hash), u = h.u, k = h.k;
+  if (u && k){ set('mgU', u); set('mgK', k); } else { u = get('mgU'); k = get('mgK'); }
+
+  var frame = document.getElementById('app'), setup = document.getElementById('setup'), loading = document.getElementById('loading');
+  function open(url, key){
+    frame.src = url + (url.indexOf('?') < 0 ? '?' : '&') + 'k=' + encodeURIComponent(key);
+    frame.style.display = 'block';
+    frame.onload = function(){ loading.style.display = 'none'; };
+  }
+  if (u && k && /^https:\/\/script\.google\.com\//.test(u)) open(u, k);
+  else { loading.style.display = 'none'; setup.style.display = 'block'; }
+
+  setup.addEventListener('submit', function(e){
+    e.preventDefault();
+    var nu = document.getElementById('u').value.trim(), nk = document.getElementById('k').value.trim();
+    if (!/^https:\/\/script\.google\.com\//.test(nu) || !nk){ alert('Check the URL and key.'); return; }
+    set('mgU', nu); set('mgK', nk); setup.style.display = 'none'; loading.style.display = 'flex'; open(nu, nk);
+  });
+
+  // Match the edge colors to the dashboard theme
+  var themes = {dark:{top:'#0B0F14', bottom:'#131A22'}, light:{top:'#F4F6F9', bottom:'#FFFFFF'}};
+  window.addEventListener('message', function(e){
+    if (!/(\.googleusercontent\.com|script\.google\.com)$/.test(e.origin.replace(/^https:\/\//, ''))) return;
+    var t = e.data && themes[e.data.mgTheme]; if (!t) return;
+    document.documentElement.style.setProperty('--top', t.top);
+    document.documentElement.style.setProperty('--bottom', t.bottom);
+  });
+})();
+</script>
+</body>
+</html>
