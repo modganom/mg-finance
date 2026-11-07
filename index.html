@@ -40,6 +40,7 @@ body{display:flex;flex-direction:column}
 .remain .num{font-family:var(--display);font-weight:800;font-size:18px}
 .remain.pos{background:rgba(60,203,127,.13);color:var(--pos)}
 .remain.neg{background:rgba(255,107,94,.14);color:var(--neg)}
+.alloc{margin-top:12px}
 .saved{margin-top:8px;padding:10px 14px;border-radius:14px;background:var(--surface2);font-weight:600;font-size:14px}
 .saved .num{font-family:var(--display);font-weight:800;font-size:18px;color:var(--liquid)}
 .saved .num .small{font-family:var(--sans);font-weight:500;font-size:12.5px}
@@ -402,6 +403,18 @@ function spendIn(R, accts){ return S.data.tx.filter(function(t){ return isSpend(
 function debtIn(R, accts){ return S.data.tx.filter(function(t){ return isDebt(t) && inR(t, R) && (!accts || accts[t.from] !== false); }); }
 
 /* ---------- pages ---------- */
+function allocHtml(inc, spent, saved, goal){
+  var rem = inc - spent - saved, base = Math.max(inc, spent + Math.max(saved, 0), 1);
+  var seg = function(v, c){ return v > 0 ? '<div style="width:' + (v / base * 100) + '%;background:' + c + '"></div>' : ''; };
+  var h = '<div class="alloc"><div class="row small"><span class="mute">Where this period\u2019s income went</span></div>' +
+    '<div class="stack" style="height:10px;margin:8px 0 8px">' + seg(spent, 'var(--neg)') + seg(Math.max(saved, 0), 'var(--liquid)') + seg(Math.max(rem, 0), 'var(--pos)') + '</div>' +
+    '<div class="legend"><span><span class="sw" style="background:var(--neg)"></span>Spent</span><span><span class="sw" style="background:var(--liquid)"></span>Saved</span><span><span class="sw" style="background:var(--pos)"></span>Remaining</span></div></div>';
+  h += '<div class="saved"><div class="row"><span>Saved this period</span><span class="num">' + mh(saved) + (goal ? '<span class="mute small"> of ' + mh(goal) + '</span>' : '') + '</span></div>' +
+    (goal ? '<div class="bar"><i style="width:' + Math.max(0, Math.min(100, saved / goal * 100)) + '%;background:var(--liquid)"></i></div>' : '<p class="q" style="margin:4px 0 0">Set a savings goal in Budgets to track progress.</p>') + '</div>';
+  h += '<div class="remain ' + (rem < 0 ? 'neg' : 'pos') + '"><span>' + (rem < 0 ? 'Over income by' : 'Remaining this period') + '</span><span class="num">' + mh(Math.abs(rem)) + '</span></div>' +
+    '<p class="q" style="margin:6px 2px 0">Income minus spent minus saved.</p>';
+  return h;
+}
 function pageOverview(){
   var t = today(), P = resolve({type:'pp', off:0}), cur = S.data.accounts;
   var liq = balAt(t, 'Liquid'), tot = balAt(t, 'Total'), back = add(t, -30), hasHist = S.hist.start < t;
@@ -428,9 +441,7 @@ function pageOverview(){
   h += '<button type="button" class="card tap strip" data-act="nav" data-v="balance" aria-label="Daily accounts">' + ['Cash Daily','Whish','Bank'].map(function(n){ if (!cur.some(function(x){ return x.name === n; })) return ''; return '<div class="cell" style="--c:' + accCol(n) + '"><span class="k"><span class="sw" style="background:' + accCol(n) + '"></span>' + n + '</span><span class="v num">' + mh(balAt(t, n)) + '</span></div>'; }).join('') + '</button>';
   h += '<div class="grid g57"><button type="button" class="card tap" data-act="nav" data-v="budgets"><div class="row"><span class="k">Pay period, ' + fd(P.start) + ' to ' + fd(P.end) + '</span></div>' +
        '<div class="tiles" style="margin:12px 0 0"><div class="tile"><span class="k">Income</span><span class="v num pos">' + mh(inc) + '</span></div><div class="tile"><span class="k">Spent</span><span class="v num">' + m(spent) + '</span></div></div>' +
-       '<div class="remain ' + (inc - spent < 0 ? 'neg' : 'pos') + '"><span>' + (inc - spent < 0 ? 'Over income by' : 'Remaining this period') + '</span><span class="num">' + mh(Math.abs(inc - spent)) + '</span></div>' +
-       '<div class="saved"><div class="row"><span>Saved this period</span><span class="num">' + mh(savedP) + (goalP ? '<span class="mute small"> of ' + mh(goalP) + '</span>' : '') + '</span></div>' +
-       (goalP ? '<div class="bar"><i style="width:' + Math.max(0, Math.min(100, savedP / goalP * 100)) + '%;background:var(--liquid)"></i></div>' : '<p class="q" style="margin:4px 0 0">Set a savings goal in Budgets to track progress.</p>') + '</div>' +
+       allocHtml(inc, spent, savedP, goalP) +
        '<p style="margin:12px 0 0;font-size:14px">' + esc(paceTxt) + '</p>' +
        '<div style="display:flex;align-items:baseline;gap:8px;margin:16px 0 8px"><span class="days num">' + daysLeft + '</span><span class="mute">' + (daysLeft === 1 ? 'day' : 'days') + ' to payday</span></div>' +
        '<div class="bar"><i style="width:' + (elapsed / P.days * 100) + '%;background:var(--text);opacity:.85"></i></div></button>' +
