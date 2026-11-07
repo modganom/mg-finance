@@ -228,7 +228,7 @@ var PAGES = [
   {id:'budgets', name:'Budgets', short:'Budgets', icon:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/>'},
   {id:'records', name:'Records', short:'Records', icon:'<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>'}
 ];
-var CAT_COL = {'Groceries':'#F97066','Eating Out':'#FDB022','Bills & Utilities':'#2ED3B7','Home':'#A48AFB','Transport & Car':'#7CD4FD','Shopping':'#F670C7','Life & Fun':'#85E13A','Family & Giving':'#FD853A','Fees & Other':'#98A2B3','Health & Care':'#36BFFA'};
+var CAT_COL = {'Groceries':'#F97066','Eating Out':'#FDB022','Bills & Utilities':'#2ED3B7','Home':'#A48AFB','Transport & Car':'#7CD4FD','Shopping':'#F670C7','Life & Fun':'#85E13A','Family & Giving':'#FD853A','Fees & Other':'#98A2B3','Health & Care':'#36BFFA','Debt':'#B7795D'};
 var LAB_COL = {'Planned':'#85E13A','Impulse':'#FDB022','Leak':'#F97066','Social':'#7CD4FD','Work':'#A48AFB','To be paid back':'#2ED3B7'};
 var MNW_COL = {'Must':'#F97066','Need':'#FDB022','Want':'#2ED3B7','Not tagged':'#667085'};
 var ACC_COL = {'Bank':'#85E13A','Cash Daily':'#98A2B3','Savings':'#5CB8FF','Whish':'#F97066','Gold':'#F2C25B','Crypto':'#A48AFB'};
@@ -264,7 +264,10 @@ function pct(x){ return (x > 0 ? '+' : '') + (Math.abs(x) < 10 ? x.toFixed(1) : 
 function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 function accCol(n){ return ACC_COL[n] || catCol(n); }
 function catCol(c, i){ if (CAT_COL[c] || LAB_COL[c]) return CAT_COL[c] || LAB_COL[c]; var h = 0, k = String(c || ''); for (var j = 0; j < k.length; j++) h = (h * 31 + k.charCodeAt(j)) >>> 0; return k ? EXTRA[h % EXTRA.length] : EXTRA[(i||0) % EXTRA.length]; }
-function isSpend(t){ return t.type === 'Expense' || t.type === 'Debt payment'; }
+function isSpend(t){ return t.type === 'Expense'; }
+function isDebt(t){ return t.type === 'Debt payment'; }
+function isOut(t){ return isSpend(t) || isDebt(t); }
+function catOf(t){ return isDebt(t) ? 'Debt' : (t.cat || 'Uncategorized'); }
 function isInv(n){ return n === 'Gold' || n === 'Crypto'; }
 function sum(a, f){ var s = 0; a.forEach(function(x){ s += f ? f(x) : x; }); return s; }
 function kfmt(v){ var a = Math.abs(v); return mask((v < 0 ? '-$' : '$') + (a >= 1000 ? (a/1000).toFixed(a % 1000 === 0 || a >= 10000 ? 0 : 1) + 'k' : Math.round(a))); }
@@ -310,7 +313,7 @@ function bIndex(b, d){ for (var i = 0; i < b.length; i++) if (d >= b[i].s && d <
 function flowsOf(t){
   var f = {};
   if (t.type === 'Income' || t.type === 'Value update') f[t.from] = t.usd;
-  else if (isSpend(t)) f[t.from] = -t.usd;
+  else if (isOut(t)) f[t.from] = -t.usd;
   else if (t.type === 'Transfer'){ f[t.from] = -t.usd; if (t.to) f[t.to] = (f[t.to] || 0) + t.usd; }
   return f;
 }
@@ -379,8 +382,8 @@ function rangeBar(pk){
   return h + '</div>';
 }
 function recRow(t){
-  var title = t.type === 'Transfer' ? 'Transfer' : (t.cat || t.type);
-  var col = t.type === 'Income' ? '#32D583' : t.type === 'Transfer' ? '#98A2B3' : t.type === 'Value update' ? '#A48AFB' : catCol(t.cat);
+  var title = t.type === 'Transfer' ? 'Transfer' : isDebt(t) ? 'Debt' : (t.cat || t.type);
+  var col = t.type === 'Income' ? '#32D583' : t.type === 'Transfer' ? '#98A2B3' : t.type === 'Value update' ? '#A48AFB' : catCol(catOf(t));
   var acct = t.type === 'Transfer' ? t.from + ' to ' + t.to : t.from;
   var sub = [acct, t.note].filter(Boolean).join(', ');
   var amt = t.type === 'Income' ? '<span class="pos">+' + mh(t.usd, 'dec') + '</span>' : t.type === 'Transfer' ? '<span class="mute">' + m(t.usd, 'dec') + '</span>' : t.type === 'Value update' ? '<span>' + (t.usd >= 0 ? '+' : '') + m(t.usd, 'dec') + '</span>' : '<span class="neg">-' + m(t.usd, 'dec') + '</span>';
@@ -389,6 +392,7 @@ function recRow(t){
 }
 function sortedTx(){ return S.data.tx.slice().sort(function(a, b){ return a.date === b.date ? (b.time || '').localeCompare(a.time || '') || b.row - a.row : (a.date < b.date ? 1 : -1); }); }
 function spendIn(R, accts){ return S.data.tx.filter(function(t){ return isSpend(t) && inR(t, R) && (!accts || accts[t.from] !== false); }); }
+function debtIn(R, accts){ return S.data.tx.filter(function(t){ return isDebt(t) && inR(t, R) && (!accts || accts[t.from] !== false); }); }
 
 /* ---------- pages ---------- */
 function pageOverview(){
@@ -396,14 +400,15 @@ function pageOverview(){
   var liq = balAt(t, 'Liquid'), tot = balAt(t, 'Total'), back = add(t, -30), hasHist = S.hist.start < t;
   var liq0 = balAt(back, 'Liquid'), tot0 = balAt(back, 'Total');
   function delta(a, b){ if (!hasHist || !b) return '<span class="badge">Tracking since ' + fd(S.hist.start) + '</span>'; var p = (a - b) / b * 100; return '<span class="badge ' + (p >= 0 ? 'up' : 'down') + '">' + pct(p) + ' in 30 days</span>'; }
-  var spend = spendIn(P), spent = sum(spend, function(x){ return x.usd; });
+  var spend = spendIn(P), spent = sum(spend, function(x){ return x.usd; }), debtP = sum(debtIn(P), function(x){ return x.usd; });
   var inc = sum(S.data.tx.filter(function(x){ return x.type === 'Income' && inR(x, P); }), function(x){ return x.usd; });
   var budTot = sum(Object.keys(S.data.budgets).map(function(k){ return S.data.budgets[k]; }));
   var elapsed = Math.min(P.days, diff(t, P.start) + 1), daysLeft = diff(add(P.end, 1), t);
   var paceTxt = '';
   if (budTot > 0){ var pace = budTot * elapsed / P.days, dv = spent - pace; paceTxt = m(Math.max(budTot - spent, 0)) + ' left of ' + m(budTot) + '. ' + (spent > budTot ? 'Over budget by ' + m(spent - budTot) + '.' : Math.abs(dv) < 15 ? 'Right on pace.' : dv > 0 ? m(dv) + ' ahead of pace.' : m(-dv) + ' under pace.'); }
   else paceTxt = 'Spent ' + m(spent) + ' so far. Set budgets to track pace.';
-  var cats = {}; spend.forEach(function(x){ cats[x.cat || 'Uncategorized'] = (cats[x.cat || 'Uncategorized'] || 0) + x.usd; });
+  if (debtP > 0) paceTxt += ' Debt payments: ' + m(debtP) + '.';
+  var cats = {}; spend.concat(debtIn(P)).forEach(function(x){ var c = catOf(x); cats[c] = (cats[c] || 0) + x.usd; });
   var top = Object.keys(cats).sort(function(a, b){ return cats[b] - cats[a]; }).slice(0, 4);
   var recent = sortedTx().slice(0, 5);
   var alerts = alertsHtml();
@@ -493,43 +498,45 @@ function chgBadge(a, b){ if (!b || Math.abs(a - b) < 0.005) return '<span class=
 function hexA(hex, a){ var h = hex.replace('#',''); if (h.length !== 6) return hex; return 'rgba(' + parseInt(h.substr(0,2),16) + ',' + parseInt(h.substr(2,2),16) + ',' + parseInt(h.substr(4,2),16) + ',' + a + ')'; }
 
 function flowTotals(R){
-  var inc = 0, exp = 0;
-  S.data.tx.forEach(function(x){ if (!inR(x, R)) return; if (x.type === 'Income') inc += x.usd; else if (isSpend(x)) exp += x.usd; });
-  return {inc:inc, exp:exp, net:inc - exp};
+  var inc = 0, exp = 0, debt = 0;
+  S.data.tx.forEach(function(x){ if (!inR(x, R)) return; if (x.type === 'Income') inc += x.usd; else if (isSpend(x)) exp += x.usd; else if (isDebt(x)) debt += x.usd; });
+  return {inc:inc, exp:exp, debt:debt, out:exp + debt, net:inc - exp - debt};
 }
 function pageCashflow(){
   var r = S.cf.r, R = resolve(r), P = prevOf(r, R), a = flowTotals(R), b = flowTotals(P);
-  var ch = b.net ? (a.net - b.net) / Math.abs(b.net) * 100 : null, mx = Math.max(a.inc, a.exp, 1), goal = S.data.settings.savingsGoal;
+  var ch = b.net ? (a.net - b.net) / Math.abs(b.net) * 100 : null, mx = Math.max(a.inc, a.out, 1), goal = S.data.settings.savingsGoal;
   S.cf.R = R;
   var h = '<div class="head"><div><h1>Cash flow</h1><p class="q">Am I spending less than I make?</p></div></div>' + rangeBar('cf');
   h += '<div class="grid g57"><div class="card"><div class="chead"><div><span class="k">Kept in this range</span><span class="big num ' + (a.net >= 0 ? 'pos' : 'neg') + '">' + m(a.net) + '</span></div>' + (ch === null ? '<span class="badge">No previous data</span>' : '<span class="badge ' + (ch >= 0 ? 'up' : 'down') + '">' + pct(ch) + ' vs previous</span>') + '</div>' +
        '<div class="row" style="margin-top:6px"><span style="font-weight:600">Income</span><span class="num" style="font-weight:700">' + m(a.inc) + '</span></div><div class="bar" style="height:12px"><i style="width:' + (a.inc / mx * 100) + '%;background:var(--pos)"></i></div>' +
-       '<div class="row" style="margin-top:14px"><span style="font-weight:600">Expenses</span><span class="num" style="font-weight:700">' + m(a.exp) + '</span></div><div class="bar" style="height:12px"><i style="width:' + (a.exp / mx * 100) + '%;background:var(--neg)"></i></div>' +
+       '<div class="row" style="margin-top:14px"><span style="font-weight:600">Money out</span><span class="num" style="font-weight:700">' + m(a.out) + '</span></div><div class="bar" style="height:12px;display:flex;overflow:hidden"><i style="position:static;width:' + (a.exp / mx * 100) + '%;background:var(--neg);border-radius:999px 0 0 999px"></i><i style="position:static;width:' + (a.debt / mx * 100) + '%;background:' + CAT_COL.Debt + ';border-radius:0"></i></div>' +
+       '<div class="legend" style="margin-top:8px"><span><span class="sw" style="background:var(--neg)"></span>Expenses ' + m(a.exp) + '</span><span><span class="sw" style="background:' + CAT_COL.Debt + '"></span>Debt ' + m(a.debt) + '</span></div>' +
        '<div class="tiles" style="margin:16px 0 0"><div class="tile"><span class="k">Savings rate</span><span class="v num">' + (a.inc ? Math.round(a.net / a.inc * 100) + '%' : 'n/a') + '</span></div><div class="tile"><span class="k">' + (goal ? 'Goal per period' : 'Previous period kept') + '</span><span class="v num">' + (goal ? m(goal) : m(b.net)) + '</span></div></div>' +
        (goal ? '<div class="bar" style="margin-top:12px"><i style="width:' + Math.max(0, Math.min(100, a.net / goal * 100)) + '%;background:var(--pos)"></i></div><p class="q" style="margin-top:8px">' + (a.net >= goal ? 'Goal reached.' : m(goal - a.net) + ' to go to reach the goal.') + '</p>' : '') + '</div>';
   h += '<div class="card"><div class="chead"><div><h2>Cash flow trend</h2><p class="q">Which periods I saved more or less</p></div>' + seg('cftrend', [['trend','Trend'],['cum','Cumulative']], S.cf.trend) + '</div><div class="chartbox"><canvas id="cfTrend"></canvas></div></div></div>';
-  h += '<div class="card"><div class="chead"><div><h2>Period to period</h2><p class="q">This range against the previous one and the same range last year</p></div>' + seg('cfcmp', [['net','Cash flow'],['exp','Expenses'],['inc','Income']], S.cf.cmp) + '</div><div class="chartbox"><canvas id="cfCmp"></canvas></div></div>';
+  h += '<div class="card"><div class="chead"><div><h2>Period to period</h2><p class="q">This range against the previous one and the same range last year</p></div>' + seg('cfcmp', [['net','Cash flow'],['exp','Money out'],['inc','Income']], S.cf.cmp) + '</div><div class="chartbox"><canvas id="cfCmp"></canvas></div></div>';
   return h;
 }
 function afterCashflow(){
-  var R = S.cf.R, B = bucketsOf(R), inc = B.map(function(){ return 0; }), exp = inc.slice();
-  S.data.tx.forEach(function(x){ if (!inR(x, R)) return; var i = bIndex(B, x.d); if (i < 0) return; if (x.type === 'Income') inc[i] += x.usd; else if (isSpend(x)) exp[i] += x.usd; });
+  var R = S.cf.R, B = bucketsOf(R), inc = B.map(function(){ return 0; }), exp = inc.slice(), dbt = inc.slice();
+  S.data.tx.forEach(function(x){ if (!inR(x, R)) return; var i = bIndex(B, x.d); if (i < 0) return; if (x.type === 'Income') inc[i] += x.usd; else if (isSpend(x)) exp[i] += x.usd; else if (isDebt(x)) dbt[i] += x.usd; });
   var labels = B.map(function(b){ return b.l; }), t = today();
   var o = baseOpts(); o.plugins.legend = {display:true, position:'bottom', labels:{boxWidth:8, boxHeight:8, usePointStyle:true, color:css('--mute')}};
   if (S.cf.trend === 'trend'){
-    var net = inc.map(function(v, i){ return B[i].s > t ? null : v - exp[i]; });
+    var net = inc.map(function(v, i){ return B[i].s > t ? null : v - exp[i] - dbt[i]; });
     chart('cfTrend', {data:{labels:labels, datasets:[
       {type:'bar', label:'Income', data:inc, backgroundColor:css('--pos'), borderRadius:4, stack:'s'},
       {type:'bar', label:'Expenses', data:exp.map(function(v){ return -v; }), backgroundColor:css('--neg'), borderRadius:4, stack:'s'},
-      Object.assign(line('Cash flow', net, css('--text')), {type:'line'})]}, options:Object.assign(o, {scales:Object.assign(o.scales, {x:Object.assign(o.scales.x, {stacked:true}), y:Object.assign(o.scales.y, {stacked:false})})})});
+      {type:'bar', label:'Debt', data:dbt.map(function(v){ return -v; }), backgroundColor:CAT_COL.Debt, borderRadius:4, stack:'s'},
+      Object.assign(line('Cash flow', net, css('--text')), {type:'line', stack:'line'})]}, options:Object.assign(o, {scales:Object.assign(o.scales, {x:Object.assign(o.scales.x, {stacked:true}), y:Object.assign(o.scales.y, {stacked:true})})})});
   } else {
-    var run = 0, cum = inc.map(function(v, i){ if (B[i].s > t) return null; run += v - exp[i]; return run; });
+    var run = 0, cum = inc.map(function(v, i){ if (B[i].s > t) return null; run += v - exp[i] - dbt[i]; return run; });
     chart('cfTrend', {type:'line', data:{labels:labels, datasets:[line('Cumulative', cum, css('--accent'), {fill:true, backgroundColor:hexA(css('--accent'), .12)})]}, options:o});
   }
   var r = S.cf.r, P = prevOf(r, R), L = lastYearOf(R), key = S.cf.cmp;
   function cumSeries(X, cut){ var out = [], run = 0, days = Math.max(R.days, X.days || R.days);
     for (var i = 0; i < R.days; i++){ var d = add(X.start, i); if (cut && d > t){ out.push(null); continue; }
-      S.data.tx.forEach(function(x){ if (x.date !== K(d)) return; if (key !== 'exp' && x.type === 'Income') run += x.usd; if (key !== 'inc' && isSpend(x)) run += key === 'net' ? -x.usd : x.usd; });
+      S.data.tx.forEach(function(x){ if (x.date !== K(d)) return; if (key !== 'exp' && x.type === 'Income') run += x.usd; if (key !== 'inc' && isOut(x)) run += key === 'net' ? -x.usd : x.usd; });
       out.push(run); } return out; }
   var lbl = []; for (var i = 0; i < R.days; i++) lbl.push(R.days <= 62 ? 'Day ' + (i + 1) : fd(add(R.start, i)));
   var o2 = baseOpts(); o2.plugins.legend = {display:true, position:'bottom', labels:{boxWidth:8, boxHeight:8, usePointStyle:true, color:css('--mute')}};
@@ -542,14 +549,18 @@ function pageSpending(){
   var tx = spendIn(R, S.sp.accts), total = sum(tx, function(x){ return x.usd; });
   S.sp.R = R; S.sp.tx = tx;
   var by = S.sp.view === 'cat' ? 'cat' : 'label', groups = {};
-  tx.forEach(function(x){ var k = x[by] || (by === 'cat' ? 'Uncategorized' : 'No label'); groups[k] = (groups[k] || 0) + x.usd; });
-  var keys = Object.keys(groups).sort(function(a, b){ return groups[b] - groups[a]; }); S.sp.keys = keys; S.sp.groups = groups;
+  tx.forEach(function(x){ var k = by === 'cat' ? catOf(x) : (x.label || 'No label'); groups[k] = (groups[k] || 0) + x.usd; });
+  var keys = Object.keys(groups).sort(function(a, b){ return groups[b] - groups[a]; });
+  var debtT = sum(debtIn(R, S.sp.accts), function(x){ return x.usd; });
+  if (by === 'cat' && debtT > 0){ groups['Debt'] = debtT; keys.push('Debt'); }
+  var pctBase = total + (by === 'cat' ? debtT : 0);
+  S.sp.keys = keys; S.sp.groups = groups;
   var P = prevOf(r, R), prevTotal = sum(spendIn(P, S.sp.accts), function(x){ return x.usd; });
   var h = '<div class="head"><div><h1>Spending</h1><p class="q">Where does my money go?</p></div></div>' + rangeBar('sp');
   h += '<div class="chips" style="margin:-4px 0 14px">' + liquidAccts.map(function(a){ return '<button type="button" class="chip" data-act="spacct" data-v="' + esc(a.name) + '" aria-pressed="' + (S.sp.accts[a.name] !== false) + '"><span class="dot" style="background:' + accCol(a.name) + '"></span>' + esc(a.name) + '</button>'; }).join('') + '</div>';
   h += '<div class="grid g2"><div class="card"><div class="chead"><div><h2>Categories and labels</h2><p class="q">' + (prevTotal ? (total >= prevTotal ? m(total - prevTotal) + ' more than the previous range' : m(prevTotal - total) + ' less than the previous range') : 'Tap a row to see its records') + '</p></div>' + seg('spview', [['cat','Categories'],['lab','Labels']], S.sp.view) + '</div>' +
-       (keys.length ? '<div class="donutwrap"><canvas id="spDonut"></canvas><div class="donutc"><span class="k">Spent</span><span class="num" style="font-size:26px;font-weight:800">' + m(total) + '</span></div></div>' +
-       keys.map(function(k, i){ var c = by === 'cat' ? catCol(k, i) : catCol(k, i); return '<button type="button" class="rowbtn" data-act="rec" data-' + (by === 'cat' ? 'cat' : 'label') + '="' + esc(k) + '" data-s="' + K(R.start) + '" data-e="' + K(R.end) + '"><div class="row"><span class="n"><span class="sw" style="background:' + c + '"></span>' + esc(k) + '</span><span class="v">' + m(groups[k]) + ' <span class="mute small">' + Math.round(groups[k] / total * 100) + '%</span></span></div><div class="bar"><i style="width:' + (groups[k] / groups[keys[0]] * 100) + '%;background:' + c + '"></i></div></button>'; }).join('')
+       (keys.length ? '<div class="donutwrap"><canvas id="spDonut"></canvas><div class="donutc"><span class="k">Spent</span><span class="num" style="font-size:26px;font-weight:800">' + m(total) + '</span>' + (by === 'cat' && debtT > 0 ? '<span class="k small">+ ' + m(debtT) + ' debt</span>' : '') + '</div></div>' +
+       keys.map(function(k, i){ var c = by === 'cat' ? catCol(k, i) : catCol(k, i); return '<button type="button" class="rowbtn" data-act="rec" data-' + (by === 'cat' ? 'cat' : 'label') + '="' + esc(k) + '" data-s="' + K(R.start) + '" data-e="' + K(R.end) + '"><div class="row"><span class="n"><span class="sw" style="background:' + c + '"></span>' + esc(k) + '</span><span class="v">' + m(groups[k]) + ' <span class="mute small">' + Math.round(groups[k] / (pctBase || 1) * 100) + '%' + (k === 'Debt' && by === 'cat' ? ', not in Spent' : '') + '</span></span></div><div class="bar"><i style="width:' + (groups[k] / groups[keys[0]] * 100) + '%;background:' + c + '"></i></div></button>'; }).join('')
        : '<div class="empty">No spending in this range.</div>') + '</div>';
   var nat = S.sp.nature, natTotal = sum(tx.filter(function(x){ return nat === 'All' || x.mnw === nat; }), function(x){ return x.usd; });
   var mn = {Must:0, Need:0, Want:0, 'Not tagged':0}; tx.forEach(function(x){ mn[mn.hasOwnProperty(x.mnw) ? x.mnw : 'Not tagged'] += x.usd; });
@@ -591,6 +602,7 @@ function pageBudgets(){
   var elapsed = Math.max(0, Math.min(R.days, diff(asOf, R.start) + 1)), pace = elapsed / R.days;
   var bud = S.data.budgets, cats = Object.keys(bud), spent = {};
   spendIn(R).forEach(function(x){ spent[x.cat] = (spent[x.cat] || 0) + x.usd; });
+  debtIn(R).forEach(function(x){ spent['Debt'] = (spent['Debt'] || 0) + x.usd; });
   var totB = sum(cats.map(function(c){ return bud[c]; })), totS = sum(Object.keys(spent).map(function(c){ return spent[c]; }));
   var h = '<div class="head"><div><h1>Budgets</h1><p class="q">Per pay period, ' + fd(R.start) + ' to ' + fd(R.end) + '</p></div><button type="button" class="iconbtn" data-act="buedit">' + (S.bu.edit ? 'Close editor' : 'Edit budgets') + '</button></div>';
   h += '<div class="rangebar"><div class="rnav"><button type="button" data-act="buoff" data-v="-1" aria-label="Earlier">&#8249;</button><span class="lbl">' + fd(R.start) + ' to ' + fd(R.end) + '</span><button type="button" data-act="buoff" data-v="1" aria-label="Later"' + (S.bu.off >= 0 ? ' disabled' : '') + '>&#8250;</button></div></div>';
@@ -622,24 +634,25 @@ function pageRecords(){
   }
   var list = sortedTx().filter(function(t){
     if (f.type === 'Expenses' && !isSpend(t)) return false;
+    if (f.type === 'Debt' && !isDebt(t)) return false;
     if (f.type === 'Income' && t.type !== 'Income') return false;
     if (f.type === 'Transfers' && t.type !== 'Transfer') return false;
-    if (f.cat && t.cat !== f.cat) return false;
+    if (f.cat && catOf(t) !== f.cat) return false;
     if (f.label && t.label !== f.label) return false;
     if (f.day && t.date !== f.day) return false;
     if (bs && t.date < bs) return false;
     if (be && t.date > be) return false;
-    if (q && [t.note, t.cat, t.label, t.from, t.to, t.type].join(' ').toLowerCase().indexOf(q) < 0) return false;
+    if (q && [t.note, catOf(t), t.label, t.from, t.to, t.type].join(' ').toLowerCase().indexOf(q) < 0) return false;
     return true;
   });
   var active = [];
   if (f.cat) active.push(['cat', f.cat]); if (f.label) active.push(['label', 'Label: ' + f.label]); if (f.day) active.push(['day', fdy(D(f.day))]);
   if (f.range === 'custom' && f.start && !f.day) active.push(['range', fd(D(f.start)) + ' to ' + fd(D(f.end))]);
-  var exp = sum(list.filter(isSpend), function(x){ return x.usd; });
-  var h = '<div class="head"><div><h1>Records</h1><p class="q">' + list.length + ' ' + (list.length === 1 ? 'entry' : 'entries') + (exp ? ', ' + m(exp) + ' spent' : '') + '</p></div>' + (f.origin ? '<button type="button" class="iconbtn" data-act="nav" data-v="' + f.origin + '">Back</button>' : '') + '</div>';
+  var exp = sum(list.filter(isSpend), function(x){ return x.usd; }), dbtL = sum(list.filter(isDebt), function(x){ return x.usd; });
+  var h = '<div class="head"><div><h1>Records</h1><p class="q">' + list.length + ' ' + (list.length === 1 ? 'entry' : 'entries') + (exp ? ', ' + m(exp) + ' spent' : '') + (dbtL ? ', ' + m(dbtL) + ' debt' : '') + '</p></div>' + (f.origin ? '<button type="button" class="iconbtn" data-act="nav" data-v="' + f.origin + '">Back</button>' : '') + '</div>';
   h += '<input class="search" type="search" placeholder="Search notes, categories, accounts" data-chg="recq" value="' + esc(f.q) + '">';
   h += '<div class="chips" style="margin-bottom:8px">' + [['7d','7 days'],['30d','30 days'],['month','This month'],['pp','Pay period'],['6m','6 months'],['all','All time']].map(function(x){ return '<button type="button" class="chip" data-act="recrange" data-v="' + x[0] + '" aria-pressed="' + (!f.day && f.range === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div>';
-  h += '<div class="chips" style="margin-bottom:8px">' + ['All','Expenses','Income','Transfers'].map(function(x){ return '<button type="button" class="chip" data-act="rectype" data-v="' + x + '" aria-pressed="' + (f.type === x) + '">' + x + '</button>'; }).join('') +
+  h += '<div class="chips" style="margin-bottom:8px">' + ['All','Expenses','Debt','Income','Transfers'].map(function(x){ return '<button type="button" class="chip" data-act="rectype" data-v="' + x + '" aria-pressed="' + (f.type === x) + '">' + x + '</button>'; }).join('') +
        active.map(function(a){ return '<button type="button" class="chip" aria-pressed="true" data-act="recx" data-v="' + a[0] + '">' + esc(a[1]) + ' &#215;</button>'; }).join('') + '</div>';
   var shown = list.slice(0, f.limit), lastDay = null, body = '';
   shown.forEach(function(t){ if (t.date !== lastDay){ if (lastDay !== null) body += '</div>'; lastDay = t.date; var dd = D(t.date), dt = sum(list.filter(function(x){ return x.date === t.date && isSpend(x); }), function(x){ return x.usd; }); body += '<div class="dayhead row"><span>' + fdy(dd) + '</span><span>' + (dt ? '-' + m(dt) : '') + '</span></div><div class="card" style="padding:4px 14px">'; } body += recRow(t); });
@@ -720,7 +733,7 @@ document.addEventListener('click', function(e){
   if (a === 'rec'){
     var from = S.page;
     S.rec = {q:el.getAttribute('data-q') || '', type:'All', range:(el.getAttribute('data-s') ? 'custom' : '30d'), cat:el.getAttribute('data-cat'), label:el.getAttribute('data-label'), mnw:null, day:el.getAttribute('data-day'), start:el.getAttribute('data-s'), end:el.getAttribute('data-e'), limit:60, origin:el.getAttribute('data-clear') ? null : from};
-    if (S.rec.cat || S.rec.label || S.rec.day || S.rec.q) S.rec.type = 'Expenses';
+    if (S.rec.cat || S.rec.label || S.rec.day || S.rec.q) S.rec.type = S.rec.cat === 'Debt' ? 'Debt' : (S.rec.cat ? 'Expenses' : 'All');
     return go('records');
   }
 });
