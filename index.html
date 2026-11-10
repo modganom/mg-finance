@@ -36,6 +36,21 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{display:flex;flex-direction:column}
 #scroller{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #scroller>main{min-height:calc(100% + 1px)}
+#lock{position:fixed;inset:0;z-index:300;background:var(--bg);display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top,0px) 20px env(safe-area-inset-bottom,0px)}
+.lk-in{width:100%;max-width:320px;text-align:center}
+.lk-t{font-family:var(--display);font-weight:800;font-size:22px;margin-bottom:18px}
+.lk-d{display:flex;gap:16px;justify-content:center;margin-bottom:6px}
+.lk-d i{width:14px;height:14px;border-radius:50%;border:2px solid var(--mute)}
+.lk-d i.f{background:var(--text);border-color:var(--text)}
+.lk-m{min-height:20px;color:var(--mute);font-size:13px;margin:8px 0 14px}
+.lk-k{display:grid;grid-template-columns:repeat(3,72px);gap:16px 24px;justify-content:center}
+.lk-k button{width:72px;height:72px;border-radius:50%;border:0;background:var(--surface2);color:var(--text);font-size:26px;font-weight:600;cursor:pointer;font-family:var(--display)}
+.lk-k button[data-lk="del"],.lk-k .lk-bio{background:transparent;font-size:14px;font-family:var(--sans)}
+.lk-k .lk-bio{color:var(--accent)}
+.lk-f{margin-top:22px;border:0;background:none;color:var(--accent);font-weight:600;cursor:pointer;font-size:14px}
+#lock .btn{width:100%}
+.shake{animation:lkshake .35s}
+@keyframes lkshake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
 .remain{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:10px 14px;border-radius:14px;font-weight:600;font-size:14px}
 .remain .num{font-family:var(--display);font-weight:800;font-size:18px}
 .remain.pos{background:rgba(60,203,127,.13);color:var(--pos)}
@@ -394,7 +409,8 @@ function recRow(t){
   var col = t.type === 'Income' ? '#32D583' : t.type === 'Transfer' ? '#98A2B3' : t.type === 'Value update' ? '#A48AFB' : catCol(catOf(t));
   var acct = t.type === 'Transfer' ? t.from + ' to ' + t.to : t.from;
   var sub = [acct, t.note].filter(Boolean).join(', ');
-  var amt = t.type === 'Income' ? '<span class="pos">+' + mh(t.usd, 'dec') + '</span>' : t.type === 'Transfer' ? '<span class="mute">' + m(t.usd, 'dec') + '</span>' : t.type === 'Value update' ? '<span>' + (t.usd >= 0 ? '+' : '') + m(t.usd, 'dec') + '</span>' : '<span class="neg">-' + m(t.usd, 'dec') + '</span>';
+  if (isOut(t) && t.usd < 0) title += ' (refund)';
+  var amt = t.type === 'Income' ? '<span class="pos">+' + mh(t.usd, 'dec') + '</span>' : t.type === 'Transfer' ? '<span class="mute">' + m(t.usd, 'dec') + '</span>' : t.type === 'Value update' ? '<span>' + (t.usd >= 0 ? '+' : '') + m(t.usd, 'dec') + '</span>' : (t.usd < 0 ? '<span class="pos">+' + m(-t.usd, 'dec') + '</span>' : '<span class="neg">-' + m(t.usd, 'dec') + '</span>');
   var orig = t.currency === 'LBP' ? '<div class="tm">' + mask(Math.round(t.amount).toLocaleString('en-US')) + ' LBP</div>' : '';
   return '<div class="rec"><div class="ricon" style="background:' + col + '">' + esc(title.charAt(0)) + '</div><div class="rmid"><div class="t">' + esc(title) + (t.label ? ' <span class="badge">' + esc(t.label) + '</span>' : '') + '</div><div class="s">' + esc(sub) + '</div></div><div class="rright"><div class="a">' + amt + '</div><div class="tm">' + esc(t.time || '') + '</div>' + orig + '</div></div>';
 }
@@ -582,7 +598,7 @@ function pageSpending(){
   h += '<div class="chips" style="margin:-4px 0 14px">' + liquidAccts.map(function(a){ return '<button type="button" class="chip" data-act="spacct" data-v="' + esc(a.name) + '" aria-pressed="' + (S.sp.accts[a.name] !== false) + '"><span class="dot" style="background:' + accCol(a.name) + '"></span>' + esc(a.name) + '</button>'; }).join('') + '</div>';
   h += '<div class="grid g2"><div class="card"><div class="chead"><div><h2>Categories and labels</h2><p class="q">' + (prevTotal ? (total >= prevTotal ? m(total - prevTotal) + ' more than the previous range' : m(prevTotal - total) + ' less than the previous range') : 'Tap a row to see its records') + '</p></div>' + seg('spview', [['cat','Categories'],['lab','Labels']], S.sp.view) + '</div>' +
        (keys.length ? '<div class="donutwrap"><canvas id="spDonut"></canvas><div class="donutc"><span class="k">Spent</span><span class="num" style="font-size:26px;font-weight:800">' + m(total) + '</span>' + (by === 'cat' && debtT > 0 ? '<span class="k small">incl. ' + m(debtT) + ' debt</span>' : '') + '</div></div>' +
-       keys.map(function(k, i){ var c = by === 'cat' ? catCol(k, i) : catCol(k, i); return '<button type="button" class="rowbtn" data-act="rec" data-' + (by === 'cat' ? 'cat' : 'label') + '="' + esc(k) + '" data-s="' + K(R.start) + '" data-e="' + K(R.end) + '"><div class="row"><span class="n"><span class="sw" style="background:' + c + '"></span>' + esc(k) + '</span><span class="v">' + m(groups[k]) + ' <span class="mute small">' + Math.round(groups[k] / (pctBase || 1) * 100) + '%'  + '</span></span></div><div class="bar"><i style="width:' + (groups[k] / groups[keys[0]] * 100) + '%;background:' + c + '"></i></div></button>'; }).join('')
+       keys.map(function(k, i){ var c = by === 'cat' ? catCol(k, i) : catCol(k, i); return '<button type="button" class="rowbtn" data-act="rec" data-' + (by === 'cat' ? 'cat' : 'label') + '="' + esc(k) + '" data-s="' + K(R.start) + '" data-e="' + K(R.end) + '"><div class="row"><span class="n"><span class="sw" style="background:' + c + '"></span>' + esc(k) + '</span><span class="v">' + m(groups[k]) + ' <span class="mute small">' + Math.round(groups[k] / (pctBase || 1) * 100) + '%'  + '</span></span></div><div class="bar"><i style="width:' + Math.max(0, groups[k] / (groups[keys[0]] || 1) * 100) + '%;background:' + c + '"></i></div></button>'; }).join('')
        : '<div class="empty">No spending in this range.</div>') + '</div>';
   var nat = S.sp.nature, natTotal = sum(tx.filter(function(x){ return nat === 'All' || (isDebt(x) ? 'Must' : x.mnw) === nat; }), function(x){ return x.usd; });
   var mn = {Must:0, Need:0, Want:0, 'Not tagged':0}; tx.forEach(function(x){ var k = isDebt(x) ? 'Must' : x.mnw; mn[mn.hasOwnProperty(k) ? k : 'Not tagged'] += x.usd; });
@@ -602,7 +618,7 @@ function calHtml(R, tx){
   var h = ['M','T','W','T','F','S','S'].map(function(w){ return '<div class="wd">' + w + '</div>'; }).join('');
   var lead = (R.start.getDay() + 6) % 7; for (var i = 0; i < lead; i++) h += '<button type="button" class="off" tabindex="-1" aria-hidden="true"></button>';
   for (var d = R.start; d <= R.end; d = add(d, 1)){
-    var v = per[K(d)] || 0, a = v ? 0.18 + 0.82 * Math.sqrt(v / mx) : 0;
+    var v = Math.max(0, per[K(d)] || 0), a = v ? 0.18 + 0.82 * Math.sqrt(v / mx) : 0;
     var st = v ? 'background:' + hexA('#F97066', a) + ';color:' + (a > .55 ? '#0B0F14' : 'var(--text)') : '';
     h += '<button type="button" class="' + (d > t ? 'fut' : '') + '" style="' + st + '" data-act="rec" data-day="' + K(d) + '" title="' + fd(d) + ': ' + m(v) + '">' + (d.getDate() === 1 || +d === +R.start ? '<span class="mo">' + MONTHS[d.getMonth()] + '</span>' : '') + d.getDate() + '</button>';
   }
@@ -610,7 +626,7 @@ function calHtml(R, tx){
 }
 function afterSpending(){
   var keys = S.sp.keys, g = S.sp.groups, by = S.sp.view === 'cat';
-  if (keys.length) chart('spDonut', {type:'doughnut', data:{labels:keys, datasets:[{data:keys.map(function(k){ return g[k]; }), backgroundColor:keys.map(function(k, i){ return by ? catCol(k, i) : catCol(k, i); }), borderColor:css('--surface'), borderWidth:3, hoverOffset:6}]},
+  if (keys.length) chart('spDonut', {type:'doughnut', data:{labels:keys, datasets:[{data:keys.map(function(k){ return Math.max(0, g[k]); }), backgroundColor:keys.map(function(k, i){ return by ? catCol(k, i) : catCol(k, i); }), borderColor:css('--surface'), borderWidth:3, hoverOffset:6}]},
     options:{responsive:true, maintainAspectRatio:false, cutout:'72%', plugins:{legend:{display:false}, tooltip:{callbacks:{label:function(c){ return ' ' + c.label + ': ' + m(c.parsed); }}}}}});
   var R = S.sp.R, B = bucketsOf(R), nat = S.sp.nature, cats = nat === 'All' ? ['Must','Need','Want','Not tagged'] : [nat];
   var data = {}; cats.forEach(function(c){ data[c] = B.map(function(){ return 0; }); });
@@ -810,7 +826,8 @@ function refresh(silent){
   else setTimeout(function(){ ok(S.data); }, 600);
 }
 document.addEventListener('visibilitychange', function(){
-  if (document.visibilityState === 'hidden'){ if (!S.hide){ S.hide = true; render(true); } }
+  if (document.visibilityState === 'hidden'){ if (API && !LOCK.on) lockShow(false); if (!S.hide){ S.hide = true; render(true); } }
+  else if (API && LOCK.on && LOCK.mode === 'unlock' && lsGet('mgCred')) bioUnlock(true);
   else if (S.data && Date.now() - S.loadedAt > 20000) refresh(true);
 });
 
@@ -875,13 +892,92 @@ function demoData(){
   window.addEventListener('orientationchange', function(){ setTimeout(size, 300); });
 })();
 
+/* ---------- lock screen: PIN with Face ID / Touch ID ---------- */
+var LOCK = {on:false, mode:'unlock', buf:'', first:'', fails:0, until:0};
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k, v){ try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){} }
+function b64u(buf){ return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function unb64u(str){ str = str.replace(/-/g,'+').replace(/_/g,'/'); while (str.length % 4) str += '='; var b = atob(str), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+function hashPin(pin, salt){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin)).then(b64u); }
+var BIO = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'Face ID' : 'Touch ID';
+function bioAvailable(){ try { return window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable ? PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function(){ return false; }) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } }
+function lockEl(){ var el = $('lock'); if (!el){ el = document.createElement('div'); el.id = 'lock'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Unlock'); document.body.appendChild(el); } return el; }
+function lockRender(msg){
+  var el = lockEl(), md = LOCK.mode;
+  if (md === 'bio'){
+    el.innerHTML = '<div class="lk-in"><div class="lk-t">Use ' + BIO + '?</div><p class="lk-m">Unlock with ' + BIO + ' next time. Your PIN stays as the backup.</p><button type="button" class="btn" data-lk="bioyes">Turn on ' + BIO + '</button><button type="button" class="btn ghost" data-lk="biono" style="margin-top:10px">Not now</button></div>';
+    return;
+  }
+  var title = md === 'setup' ? 'Create a 4-digit PIN' : md === 'confirm' ? 'Confirm your PIN' : 'Enter PIN';
+  var dots = ''; for (var i = 0; i < 4; i++) dots += '<i class="' + (i < LOCK.buf.length ? 'f' : '') + '"></i>';
+  var keys = ['1','2','3','4','5','6','7','8','9', md === 'unlock' && lsGet('mgCred') ? 'bio' : '', '0', 'del'];
+  el.innerHTML = '<div class="lk-in"><div class="lk-t">' + title + '</div><div class="lk-d' + (msg === 'err' ? ' shake' : '') + '">' + dots + '</div><p class="lk-m">' + (msg && msg !== 'err' ? esc(msg) : (msg === 'err' ? 'Wrong PIN' : '&nbsp;')) + '</p><div class="lk-k">' +
+    keys.map(function(k){ if (!k) return '<span></span>'; if (k === 'del') return '<button type="button" data-lk="del" aria-label="Delete">Delete</button>'; if (k === 'bio') return '<button type="button" data-lk="bio" class="lk-bio">' + BIO + '</button>'; return '<button type="button" data-lk="d" data-v="' + k + '">' + k + '</button>'; }).join('') +
+    '</div>' + (md === 'unlock' ? '<button type="button" class="lk-f" data-lk="forgot">Forgot PIN</button>' : '') + '</div>';
+}
+function lockShow(tryBio){ LOCK.on = true; LOCK.buf = ''; LOCK.mode = lsGet('mgPin') ? 'unlock' : 'setup'; lockRender(); lockEl().style.display = 'flex'; if (tryBio && LOCK.mode === 'unlock' && lsGet('mgCred')) bioUnlock(true); }
+function lockHide(){ LOCK.on = false; var el = lockEl(); el.style.display = 'none'; el.innerHTML = ''; }
+function bioUnlock(auto){
+  var id = lsGet('mgCred'); if (!id || !navigator.credentials) return;
+  navigator.credentials.get({publicKey:{challenge:rnd(32), rpId:location.hostname, allowCredentials:[{type:'public-key', id:unb64u(id), transports:['internal']}], userVerification:'required', timeout:60000}})
+    .then(function(c){ if (c) lockHide(); }).catch(function(){ if (!auto) lockRender('Use your PIN instead'); });
+}
+function bioSetup(){
+  navigator.credentials.create({publicKey:{challenge:rnd(32), rp:{name:'MG\u2019s Finance', id:location.hostname}, user:{id:rnd(16), name:'mg', displayName:'MG'},
+    pubKeyCredParams:[{type:'public-key', alg:-7},{type:'public-key', alg:-257}], authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred'}, timeout:60000}})
+    .then(function(c){ if (c) lsSet('mgCred', b64u(c.rawId)); lockHide(); }).catch(function(){ lockHide(); });
+}
+function lockDigit(d){
+  if (Date.now() < LOCK.until){ lockRender('Too many tries. Wait a few seconds.'); return; }
+  if (LOCK.buf.length >= 4) return;
+  LOCK.buf += d; lockRender();
+  if (LOCK.buf.length < 4) return;
+  var pin = LOCK.buf;
+  setTimeout(function(){
+    if (LOCK.mode === 'setup'){ LOCK.first = pin; LOCK.buf = ''; LOCK.mode = 'confirm'; lockRender(); return; }
+    if (LOCK.mode === 'confirm'){
+      if (pin !== LOCK.first){ LOCK.buf = ''; LOCK.mode = 'setup'; lockRender('The PINs did not match. Try again.'); return; }
+      var salt = b64u(rnd(16));
+      hashPin(pin, salt).then(function(h){ lsSet('mgPinSalt', salt); lsSet('mgPin', h); LOCK.buf = '';
+        bioAvailable().then(function(ok){ if (ok){ LOCK.mode = 'bio'; lockRender(); } else lockHide(); }); });
+      return;
+    }
+    hashPin(pin, lsGet('mgPinSalt') || '').then(function(h){
+      if (h === lsGet('mgPin')){ LOCK.fails = 0; lockHide(); return; }
+      LOCK.fails++; LOCK.buf = '';
+      if (LOCK.fails >= 5){ LOCK.until = Date.now() + 30000; LOCK.fails = 0; lockRender('Too many tries. Wait 30 seconds.'); } else lockRender('err');
+    });
+  }, 120);
+}
+document.addEventListener('click', function(e){
+  var b = e.target.closest && e.target.closest('[data-lk]'); if (!b) return;
+  var a = b.getAttribute('data-lk');
+  if (a === 'd') lockDigit(b.getAttribute('data-v'));
+  else if (a === 'del'){ LOCK.buf = LOCK.buf.slice(0, -1); lockRender(); }
+  else if (a === 'bio') bioUnlock(false);
+  else if (a === 'bioyes') bioSetup();
+  else if (a === 'biono') lockHide();
+  else if (a === 'forgot'){
+    var k = window.prompt('Enter your secret key to reset the PIN');
+    if (k === null) return;
+    if (k.trim() && k.trim() === lsGet('mgK')){ lsSet('mgPin', null); lsSet('mgPinSalt', null); lsSet('mgCred', null); LOCK.mode = 'setup'; LOCK.buf = ''; lockRender('PIN reset. Create a new one.'); }
+    else lockRender('That key does not match.');
+  }
+});
+document.addEventListener('keydown', function(e){
+  if (!LOCK.on || LOCK.mode === 'bio') return;
+  if (/^[0-9]$/.test(e.key)){ lockDigit(e.key); e.preventDefault(); }
+  else if (e.key === 'Backspace'){ LOCK.buf = LOCK.buf.slice(0, -1); lockRender(); e.preventDefault(); }
+});
+
 /* ---------- start ---------- */
 var saved = 'dark'; try { saved = localStorage.getItem('mgTheme') || 'dark'; } catch(e) {}
 S.theme = saved; document.documentElement.setAttribute('data-theme', saved); tellLauncher(saved);
 navHtml();
 function loadLive(){ google.script.run.withSuccessHandler(setData).withFailureHandler(function(e){ $('view').innerHTML = '<div class="banner">Could not load data: ' + esc(e && e.message ? e.message : e) + '</div>'; }).getRawData(KEY); }
 if (IS_GAS){ try { google.script.url.getLocation(function(loc){ KEY = (loc && loc.parameter && loc.parameter.k) || ''; loadLive(); }); } catch(e) { loadLive(); } }
-else if (API) apiGet(setData, function(e){ $('view').innerHTML = '<div class="banner">Could not load data: ' + esc(e && e.message ? e.message : e) + '</div><button type="button" class="btn ghost" data-act="disconnect">Re-enter link and key</button>'; });
+else if (API){ lockShow(true); apiGet(setData, function(e){ $('view').innerHTML = '<div class="banner">Could not load data: ' + esc(e && e.message ? e.message : e) + '</div><button type="button" class="btn ghost" data-act="disconnect">Re-enter link and key</button>'; }); }
 else if (/github\.io$/.test(location.hostname)){
   $('view').innerHTML = '<div class="head"><div><h1>Connect</h1><p class="q">Paste your web app URL and key once. They stay on this phone only.</p></div></div><div class="card edit"><div class="row"><span>Web app URL</span></div><input id="cu" class="search" placeholder="https://script.google.com/macros/s/.../exec"><div class="row"><span>Key</span></div><input id="ck" class="search" type="password" placeholder="Long secret key"><button type="button" class="btn" data-act="connect">Open dashboard</button></div>';
 }
